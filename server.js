@@ -9,10 +9,16 @@ app.use(express.json({ limit: "1mb" }));
 
 // Allow Salesforce to iframe this app (Canvas runs in an iframe)
 app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "frame-ancestors https://*.salesforce.com https://*.force.com https://*.visual.force.com https://*.lightning.force.com"
-  );
+  const ancestors = [
+    "https://*.salesforce.com",
+    "https://*.my.salesforce.com",
+    "https://*.sandbox.my.salesforce.com",
+    "https://*.force.com",
+    "https://*.lightning.force.com",
+    "https://*.visual.force.com"
+  ].join(" ");
+
+  res.setHeader("Content-Security-Policy", `frame-ancestors ${ancestors}`);
   next();
 });
 
