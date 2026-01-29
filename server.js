@@ -15,7 +15,8 @@ app.use((req, res, next) => {
     "https://*.sandbox.my.salesforce.com",
     "https://*.force.com",
     "https://*.lightning.force.com",
-    "https://*.visual.force.com"
+    "https://*.visual.force.com",
+    "https://*.my.salesforce-setup.com",
   ].join(" ");
 
   res.setHeader("Content-Security-Policy", `frame-ancestors ${ancestors}`);
