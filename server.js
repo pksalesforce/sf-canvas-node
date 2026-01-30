@@ -94,17 +94,51 @@ function pickSummary(decoded) {
     decoded?.context?.orgId ||
     null;
 
+  const userId = decoded?.userId || user?.userId || null;
+  const instanceUrl = client?.instanceUrl || null;
+
   return {
-    userId: decoded?.userId || user?.userId,
+    userId,
     username: user?.userName,
     fullName: user?.fullName,
     email: user?.email,
     orgId,
     recordId,
-    instanceUrl: client?.instanceUrl,
+    instanceUrl,
     targetOrigin: client?.targetOrigin,
     instanceId: client?.instanceId,
   };
+}
+
+function getKeyPaths(summary, jsonObj) {
+  // These are best-effort common Canvas paths; you can tweak based on what you see in your payload.
+  return [
+    {
+      label: "User Id",
+      path: "context.user.userId",
+      value: summary.userId || "-",
+    },
+    {
+      label: "Record Id",
+      path: "context.environment.parameters.recordId (or record.Id)",
+      value: summary.recordId || "-",
+    },
+    {
+      label: "Org Id",
+      path: "context.organization.organizationId",
+      value: summary.orgId || "-",
+    },
+    {
+      label: "Instance URL",
+      path: "client.instanceUrl",
+      value: summary.instanceUrl || "-",
+    },
+    {
+      label: "Target Origin",
+      path: "client.targetOrigin",
+      value: summary.targetOrigin || "-",
+    },
+  ];
 }
 
 function renderStyledPage({ title, summary, jsonObj }) {
@@ -118,6 +152,11 @@ function renderStyledPage({ title, summary, jsonObj }) {
     ["Instance", summary.instanceUrl || "-"],
     ["Target Origin", summary.targetOrigin || "-"],
   ];
+
+  const keyPaths = getKeyPaths(summary, jsonObj);
+
+  const recordUrl = summary.instanceUrl && summary.recordId ? `${summary.instanceUrl}/${summary.recordId}` : "";
+  const userUrl = summary.instanceUrl && summary.userId ? `${summary.instanceUrl}/${summary.userId}` : "";
 
   return `<!doctype html>
 <html>
@@ -135,6 +174,7 @@ function renderStyledPage({ title, summary, jsonObj }) {
       --border:rgba(255,255,255,0.12);
       --accent:#7dd3fc;
       --ok:#86efac;
+      --warn:#fbbf24;
     }
     body{
       margin:0;
@@ -197,6 +237,20 @@ function renderStyledPage({ title, summary, jsonObj }) {
       font-size:12.5px;
     }
     button:hover{background:rgba(255,255,255,0.10);}
+    button.primary{
+      border-color: rgba(125,211,252,0.25);
+      background: rgba(125,211,252,0.10);
+    }
+    button.primary:hover{
+      background: rgba(125,211,252,0.16);
+    }
+    button.warn{
+      border-color: rgba(251,191,36,0.22);
+      background: rgba(251,191,36,0.08);
+    }
+    button.warn:hover{
+      background: rgba(251,191,36,0.14);
+    }
     pre{
       margin:0;
       padding:14px;
@@ -211,7 +265,40 @@ function renderStyledPage({ title, summary, jsonObj }) {
     }
     .foot{color:var(--muted);font-size:12px;margin-top:10px;}
     code{color:rgba(230,237,243,0.9);}
-    a{color:var(--accent);text-decoration:none;}
+
+    .keypaths{
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.22);
+    }
+    .kpRow{
+      display:grid;
+      grid-template-columns: 90px 1fr;
+      gap: 6px 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .kpRow:last-child{ border-bottom:none; }
+    .kpLabel{ color: var(--muted); font-size:12px; }
+    .kpValue{ font-size:12px; overflow-wrap:anywhere; }
+    .kpPath{ color: rgba(230,237,243,0.55); font-size:11.5px; margin-top:2px; }
+    .search{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      margin: 0 0 10px;
+    }
+    .search input{
+      width: min(520px, 100%);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      padding: 9px 10px;
+      font-size: 12.5px;
+      outline: none;
+    }
+    .search small{ color: var(--muted); }
   </style>
 </head>
 <body>
@@ -242,9 +329,28 @@ function renderStyledPage({ title, summary, jsonObj }) {
 
         <div class="pill">✔ Verified signed_request</div>
 
+        <div class="keypaths">
+          <div style="color: var(--muted); font-size: 12px; font-weight: 600; margin-bottom: 6px;">Key Paths</div>
+          ${keyPaths
+            .map(
+              (kp) => `
+              <div class="kpRow">
+                <div class="kpLabel">${escapeHtml(kp.label)}</div>
+                <div>
+                  <div class="kpValue">${escapeHtml(kp.value)}</div>
+                  <div class="kpPath">${escapeHtml(kp.path)}</div>
+                </div>
+              </div>
+            `
+            )
+            .join("")}
+        </div>
+
         <div class="actions">
           <button id="copyBtn" type="button">Copy JSON</button>
           <button id="toggleBtn" type="button">Collapse / Expand JSON</button>
+          <button id="openRecordBtn" class="primary" type="button">Open Record</button>
+          <button id="openUserBtn" class="primary" type="button">Open User</button>
         </div>
 
         <div class="foot">
@@ -254,6 +360,13 @@ function renderStyledPage({ title, summary, jsonObj }) {
 
       <div class="card">
         <h3>Canvas Signed Request JSON</h3>
+
+        <div class="search">
+          <input id="searchInput" type="text" placeholder="Search inside JSON (e.g. recordId, instanceUrl, profileId)..." />
+          <button id="findNextBtn" class="warn" type="button">Find Next</button>
+          <small id="searchStatus"></small>
+        </div>
+
         <pre id="json">${escapeHtml(jsonPretty)}</pre>
       </div>
     </div>
@@ -262,6 +375,10 @@ function renderStyledPage({ title, summary, jsonObj }) {
   <script>
     const pre = document.getElementById("json");
     const raw = pre.textContent;
+
+    // Links
+    const recordUrl = ${JSON.stringify(recordUrl)};
+    const userUrl = ${JSON.stringify(userUrl)};
 
     document.getElementById("copyBtn").addEventListener("click", async () => {
       try {
@@ -274,6 +391,66 @@ function renderStyledPage({ title, summary, jsonObj }) {
 
     document.getElementById("toggleBtn").addEventListener("click", () => {
       pre.style.maxHeight = pre.style.maxHeight === "80px" ? "680px" : "80px";
+    });
+
+    document.getElementById("openRecordBtn").addEventListener("click", () => {
+      if (!recordUrl) return alert("Record URL not available.");
+      window.open(recordUrl, "_blank");
+    });
+
+    document.getElementById("openUserBtn").addEventListener("click", () => {
+      if (!userUrl) return alert("User URL not available.");
+      window.open(userUrl, "_blank");
+    });
+
+    // JSON search / find-next
+    const input = document.getElementById("searchInput");
+    const status = document.getElementById("searchStatus");
+    const findNextBtn = document.getElementById("findNextBtn");
+
+    let lastQuery = "";
+    let lastIndex = -1;
+
+    function findNext() {
+      const q = (input.value || "").trim();
+      if (!q) {
+        status.textContent = "";
+        return;
+      }
+
+      const hay = raw.toLowerCase();
+      const needle = q.toLowerCase();
+
+      // Reset if query changed
+      if (needle !== lastQuery) {
+        lastQuery = needle;
+        lastIndex = -1;
+      }
+
+      const start = lastIndex < 0 ? 0 : lastIndex + 1;
+      let idx = hay.indexOf(needle, start);
+
+      // Wrap around
+      if (idx === -1 && start > 0) idx = hay.indexOf(needle, 0);
+
+      if (idx === -1) {
+        status.textContent = "No matches";
+        return;
+      }
+
+      lastIndex = idx;
+      status.textContent = "Match at index " + idx;
+
+      // Scroll roughly to the match (line-based approximation)
+      const before = raw.slice(0, idx);
+      const lineCount = before.split("\\n").length;
+      const lineHeight = 18; // approx for 12.5px font
+      pre.scrollTop = Math.max(0, (lineCount - 3) * lineHeight);
+    }
+
+    findNextBtn.addEventListener("click", findNext);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") findNext();
     });
   </script>
 </body>
